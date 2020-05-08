@@ -1,0 +1,3 @@
+main: io.github.lukeeff.schematiclightapi.SchematicLightAPI
+version: 1.0.0
+name: SchematicLightAPI
