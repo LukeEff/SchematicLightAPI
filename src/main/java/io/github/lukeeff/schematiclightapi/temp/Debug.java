@@ -1,6 +1,7 @@
 package io.github.lukeeff.schematiclightapi.temp;
 
 import io.github.lukeeff.schematiclightapi.SchematicLightAPI;
+import io.github.lukeeff.schematiclightapi.schematic.Clipboard;
 import io.github.lukeeff.schematiclightapi.util.ClipboardTools;
 import io.github.lukeeff.schematiclightapi.util.Paste;
 import io.github.lukeeff.schematiclightapi.util.SchematicClipboard;
@@ -8,7 +9,9 @@ import lombok.Getter;
 import lombok.Setter;
 import net.minecraft.server.v1_8_R3.IBlockData;
 import net.minecraft.server.v1_8_R3.PacketPlayOutMapChunk;
+import net.minecraft.server.v1_8_R3.PacketPlayOutMapChunkBulk;
 import org.bukkit.*;
+import org.bukkit.craftbukkit.v1_8_R3.CraftChunk;
 import org.bukkit.craftbukkit.v1_8_R3.entity.CraftPlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
@@ -25,6 +28,10 @@ import static org.bukkit.Bukkit.broadcastMessage;
 import static org.bukkit.Bukkit.getConsoleSender;
 import static java.lang.System.currentTimeMillis;
 
+/**
+ * Purely for debugging. Entire class to be thrown away
+ * on completion.
+ */
 public class Debug extends AbstractBreak implements Listener {
 
     @Getter @Setter private static String schematicFileName = "test.schematic";
@@ -32,7 +39,7 @@ public class Debug extends AbstractBreak implements Listener {
     Map<Material, Runnable> axePower = new HashMap<>();
     @Getter @Setter Location loc;
     @Getter SchematicLightAPI plugin;
-    @Getter @Setter private static Set<net.minecraft.server.v1_8_R3.Chunk> chunks = new HashSet<>();
+    @Getter @Setter private static Set<Chunk> chunks = new HashSet<>();
 
     public Debug(SchematicLightAPI plugin) {
         this.plugin = plugin;
@@ -57,14 +64,12 @@ public class Debug extends AbstractBreak implements Listener {
             int count = attemptSchematicPaste(e);
             broadcastMessage(ChatColor.GREEN + "Completed. Time taken: " + (currentTimeMillis() - time) + " (ms) for " + count + " blocks!");
         }
-        refreshChunk(player);
     }
 
     private int attemptSchematicPaste(BlockBreakEvent e) {
         int blockCount = 0;
         final Location loc = e.getBlock().getLocation();
         File schematic = new File(getPlugin().getDataFolder(), getSchematicFileName());
-
 
         try {
             SchematicClipboard clipboard = new SchematicClipboard(schematic);
@@ -74,28 +79,15 @@ public class Debug extends AbstractBreak implements Listener {
             final int width = clipboard.getWidth();
             final int height = clipboard.getHeight();
             blockCount = length * width * height;
-            ClipboardTools.getChunksRelative(clipboard, loc).forEach(ch -> loc.getWorld().loadChunk((Chunk) ch));
-            setChunks(ClipboardTools.binaryPaste(loc, blockId, data, length, width, height));
+
+            ClipboardTools.getBukkitChunksRelative(clipboard, loc).forEach(affectedChunk -> getChunks().add(affectedChunk));
+            ClipboardTools.binaryPaste(loc, blockId, data, length, width, height);//.forEach(c -> loc.getWorld().refreshChunk(c.locX, c.locZ)); //So apparently this works perfectly...
+            getChunks().clear();
         } catch (IOException ioException) {
             ioException.printStackTrace();
         }
         return blockCount;
     }
-
-    private void refreshChunk(Player player) {
-        World world = player.getWorld();
-        //e.getBlock().getWorld().getNearbyEntities() For all players in range
-        chunks.forEach(chunk -> {
-            send(player, chunk);
-            world.refreshChunk(chunk.locX, chunk.locZ);
-        });
-    }
-
-    private void send(final Player player, net.minecraft.server.v1_8_R3.Chunk chunk) {
-        ((CraftPlayer) player).getHandle().playerConnection.sendPacket(new PacketPlayOutMapChunk(chunk, true, 20));
-    }
-
-
 
     @Override
     Location getLocation() {
@@ -104,16 +96,16 @@ public class Debug extends AbstractBreak implements Listener {
 
     @Override
     void setBlock(World world, int x, int y, int z, IBlockData blockData, Material block) {
-
+        net.minecraft.server.v1_8_R3.World nmsWorld = Paste.getWorldHandle(world);
         switch(block) {
             case DIAMOND_BLOCK:
-                chunks.add(Paste.unstableSetBlock(world, blockData, x, y, z));
+                Paste.unstableSetBlock(nmsWorld, blockData, x, y, z);
                 break;
             case GOLD_BLOCK:
-                chunks.add(Paste.rapidSetBlock(world, blockData, x, y, z));
+                Paste.rapidSetBlock(nmsWorld, blockData, x, y, z);
                 break;
             case IRON_BLOCK:
-                Paste.setBlock(world, blockData, x, y, z, false);
+                Paste.setBlock(nmsWorld, blockData, x, y, z, false);
                 break;
             case STONE:
                 world.getBlockAt(x,y,z).setType(block);

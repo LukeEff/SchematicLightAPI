@@ -23,8 +23,10 @@ public class CommandDebug implements CommandExecutor {
         if(strings.length > 0 && new File(plugin.getDataFolder(), strings[0] + ".schematic").exists()) {
             Debug.setSchematicFileName(strings[0] + ".schematic");
             p.sendMessage(ChatColor.AQUA + "Success. Changed schematic to: " + strings[0] + ".schematic");
-        } else {
+        } else if (strings.length > 0){
             p.sendMessage(ChatColor.DARK_RED + "Failure. No schematic by the name of " + strings[0] + ".schematic in the data folder!");
+        } else {
+            p.sendMessage(ChatColor.AQUA + "Coordinates: X: " + p.getLocation().getChunk().getX() + " Z: " + p.getLocation().getChunk().getZ());
         }
 
 

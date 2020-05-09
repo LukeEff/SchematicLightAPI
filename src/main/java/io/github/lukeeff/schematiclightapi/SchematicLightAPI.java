@@ -9,7 +9,7 @@ public class SchematicLightAPI extends JavaPlugin {
     @Override
     public void onEnable() {
         final boolean mkdirs = this.getDataFolder().mkdirs();
-        getServer().getPluginCommand("schematic").setExecutor(new CommandDebug(this));
+        getServer().getPluginCommand("loadschematic").setExecutor(new CommandDebug(this));
         getServer().getPluginManager().registerEvents(new Debug(this), this);
     }
 

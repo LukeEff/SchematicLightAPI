@@ -2,7 +2,7 @@ main: io.github.lukeeff.schematiclightapi.SchematicLightAPI
 version: 1.0.0
 name: SchematicLightAPI
 commands:
-  schematic:
+  loadschematic:
     description: Set the schematic. Do not include file type in name. Name only.
     usage: /schematic <schematic name>
     permission: im.a.noob

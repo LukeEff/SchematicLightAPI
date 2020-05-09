@@ -11,6 +11,8 @@ import org.bukkit.craftbukkit.v1_8_R3.CraftWorld;
 
 import javax.annotation.Nullable;
 import java.util.Arrays;
+import java.util.Set;
+
 import static org.bukkit.Bukkit.getConsoleSender;
 
 /**
@@ -35,10 +37,9 @@ public class Paste {
      * @param blockData the block data to be set.
      * @param applyPhysics true to apply physics.
      */
-    public static void setBlock(World world, IBlockData blockData, int x, int y, int z, boolean applyPhysics) {
-        final net.minecraft.server.v1_8_R3.World nmsWorld = getWorldHandle(world);
+    public static void setBlock(net.minecraft.server.v1_8_R3.World world, IBlockData blockData, int x, int y, int z, boolean applyPhysics) {
         final BlockPosition blockPosition = getBlockPosition(x,y,z);
-        nmsWorld.setTypeAndData(blockPosition, blockData, getApplyPhysicsId(applyPhysics));
+        world.setTypeAndData(blockPosition, blockData, getApplyPhysicsId(applyPhysics));
     }
 
     /**
@@ -52,14 +53,12 @@ public class Paste {
      * @param y location via y axis.
      * @param z location via z axis.
      * @param blockData the block data to be set.
-     * @return the chunk modified (for refreshing)
      */
-    public static Chunk rapidSetBlock(World world, IBlockData blockData, int x, int y, int z)  {
-        final Chunk chunk = getChunkAt(getWorldHandle(world), x, z);
+    public static void rapidSetBlock(net.minecraft.server.v1_8_R3.World world, IBlockData blockData, int x, int y, int z)  {
+        final Chunk chunk = getChunkAt(world, x, z);
         final BlockPosition blockPosition = getBlockPosition(x,y,z);
-
-        chunk.a(blockPosition, blockData); //I think this is setType in later NMS versions without the flag.
-        return chunk;
+        chunk.a(blockPosition, blockData);
+        updateChange(world, blockPosition);
     }
 
     /**
@@ -73,17 +72,26 @@ public class Paste {
      * @param y the y coordinate.
      * @param z the z coordinate.
      * @param blockData the block data to be set.
-     * @return the chunk modified (for refreshing)
      */
-    public static Chunk unstableSetBlock(World world, IBlockData blockData, int x, int y, int z) {
-        final Chunk chunk = getChunkAt(getWorldHandle(world), x, z);
+    public static void unstableSetBlock(net.minecraft.server.v1_8_R3.World world, IBlockData blockData, int x, int y, int z) {
+        final Chunk chunk = getChunkAt(world, x, z);
         ChunkSection chunkSection = getChunkSection(chunk, y); //Sometimes returns null
         if(chunkSection == null) {
             chunkSection = new ChunkSection(y >> 4 << 4, true);
             chunk.getSections()[y >> 4] = chunkSection;
         }
         chunkSection.setType(x & 15, y & 15, z & 15, blockData); //All non matching binary become 0.
-        return chunk;
+        updateChange(world, getBlockPosition(x, y, z));
+    }
+
+    /**
+     * Notifies a block update so that player can see.
+     *
+     * @param world the world.
+     * @param blockPosition the block.
+     */
+    public static void updateChange(net.minecraft.server.v1_8_R3.World world, BlockPosition blockPosition) {
+        world.notify(blockPosition);
     }
 
     /**
@@ -149,6 +157,34 @@ public class Paste {
         int z = blockPosition.getZ() & 15;
         ChunkSection chunkSection = new ChunkSection(y >> 4 << 4, false); //doLight
 
+    }
+
+    /**
+     * Loads chunks that are not already loaded in a given set.
+     *
+     * @param chunks the chunks to be loaded.
+     */
+    public static void loadChunks(Set<org.bukkit.Chunk> chunks) {
+        chunks.stream().filter(c -> !c.isLoaded()).forEach(org.bukkit.Chunk::load);
+    }
+
+    /**
+     * Unloads chunks that are not already unloaded in a given set.
+     *
+     * @param chunks the chunks to be unloaded.
+     */
+    public static void unloadChunks(Set<org.bukkit.Chunk> chunks) {
+        chunks.stream().filter(org.bukkit.Chunk::isLoaded).forEach(c -> c.unload(true));
+    }
+
+    /**
+     * Reloads all chunks within a given set.
+     *
+     * @param chunks the chunks to be reloaded.
+     */
+    public static void reloadChunks(Set<org.bukkit.Chunk> chunks) {
+        unloadChunks(chunks);
+        loadChunks(chunks);
     }
 
 
@@ -224,6 +260,28 @@ public class Paste {
      */
     public static BlockPosition getBlockPosition(int x, int y, int z) {
         return new BlockPosition(x,y,z);
+    }
+
+    /**
+     * Gets the lower chunk coordinate based on two different block coordinates in the same plane.
+     *
+     * @param blockXorZ one block x or z coordinate.
+     * @param otherBlockXorZ another block x or z coordinate.
+     * @return the lower chunk coordinate value.
+     */
+    public static int getLowerAsChunkCoord(int blockXorZ, int otherBlockXorZ) {
+        return Math.min(toChunkCoordinate(blockXorZ), toChunkCoordinate(otherBlockXorZ));
+    }
+
+    /**
+     * Gets the higher chunk coordinate based on two different block coordinates in the same plane.
+     *
+     * @param blockXorZ one block x or z coordinate.
+     * @param otherBlockXorZ another block x or z coordinate.
+     * @return the higher chunk coordinate value.
+     */
+    public static int getHigherAsChunkCoord(int blockXorZ, int otherBlockXorZ) {
+        return Math.max(toChunkCoordinate(blockXorZ), toChunkCoordinate(otherBlockXorZ));
     }
 
 }
