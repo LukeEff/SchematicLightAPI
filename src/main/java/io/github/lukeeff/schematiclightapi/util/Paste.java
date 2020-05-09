@@ -13,6 +13,13 @@ import javax.annotation.Nullable;
 import java.util.Arrays;
 import static org.bukkit.Bukkit.getConsoleSender;
 
+/**
+ * Utility class designed for block placing a various speeds
+ * depending on the stability that is needed.
+ *
+ * * Where I got these ideas:
+ * @See https://www.spigotmc.org/threads/methods-for-changing-massive-amount-of-blocks-up-to-14m-blocks-s.395868/
+ */
 public class Paste {
 
     //chunk.a(enumskyblock, blockposition, int) looks like a setlight method
@@ -25,84 +32,59 @@ public class Paste {
      * @param x location via x axis.
      * @param y location via y axis.
      * @param z location via z axis.
-     * @param blockId the id of the block.
-     * @param data the data of the block.
+     * @param blockData the block data to be set.
      * @param applyPhysics true to apply physics.
      */
-    public static void setBlock(World world, int x, int y, int z, int blockId, byte data, boolean applyPhysics) {
+    public static void setBlock(World world, IBlockData blockData, int x, int y, int z, boolean applyPhysics) {
         final net.minecraft.server.v1_8_R3.World nmsWorld = getWorldHandle(world);
         final BlockPosition blockPosition = getBlockPosition(x,y,z);
-        final IBlockData blockData = getBlockData(blockId, data);
         nmsWorld.setTypeAndData(blockPosition, blockData, getApplyPhysicsId(applyPhysics));
     }
 
     /**
      * Method of placing blocks that is roughly 3650% the speed of
      * the APIs setBlock method.
-     *
-     * Client side rendering failure
+     * Packet needs to be sent after and chunk needs to be reloaded to show
+     * the client the changes.
      *
      * @param world the target world.
      * @param x location via x axis.
      * @param y location via y axis.
      * @param z location via z axis.
-     * @param blockId the id of the block.
-     * @param data the data of the block.
+     * @param blockData the block data to be set.
+     * @return the chunk modified (for refreshing)
      */
-    public static Chunk rapidSetBlock(World world, int x, int y, int z, int blockId, byte data)  {
+    public static Chunk rapidSetBlock(World world, IBlockData blockData, int x, int y, int z)  {
         final Chunk chunk = getChunkAt(getWorldHandle(world), x, z);
         final BlockPosition blockPosition = getBlockPosition(x,y,z);
-        final IBlockData blockData = getBlockData(blockId, data);
+
         chunk.a(blockPosition, blockData); //I think this is setType in later NMS versions without the flag.
         return chunk;
     }
 
-
-    //TODO implement for 1.8 compatibility
-    //Not finished.
-
     /**
+     * Fastest but more unstable way to set blocks. (Sometimes client needs a relog) Very fast
+     * block setting speed (Roughly 2-4 million a second)
+     * Packet needs to be sent after and chunk needs to be reloaded to show
+     * the client the changes.
      *
-     * Client side rendering failure
-     *
-     * @param world
-     * @param x
-     * @param y
-     * @param z
-     * @param blockId
-     * @param data
-     * @return
+     * @param world the target world.
+     * @param x the x coordinate.
+     * @param y the y coordinate.
+     * @param z the z coordinate.
+     * @param blockData the block data to be set.
+     * @return the chunk modified (for refreshing)
      */
-    public static Chunk unstableSetBlock(World world, int x, int y, int z, int blockId, byte data) {
+    public static Chunk unstableSetBlock(World world, IBlockData blockData, int x, int y, int z) {
         final Chunk chunk = getChunkAt(getWorldHandle(world), x, z);
-        final IBlockData blockData = getBlockData(blockId, data);
         ChunkSection chunkSection = getChunkSection(chunk, y); //Sometimes returns null
-
-        //if(chunkSection == getValidSection(chunk)) {
-        //   chunkSection = new ChunkSection(y >> 4 << 4, true); //Flag is for sky light
-        //    chunk.getSections()[y >> 4] = chunkSection;
-        //
-        // }
         if(chunkSection == null) {
             chunkSection = new ChunkSection(y >> 4 << 4, true);
             chunk.getSections()[y >> 4] = chunkSection;
         }
-
-        //getConsoleSender().sendMessage(ChatColor.GREEN + chunkSection.toString()); //NPE if null
-
         chunkSection.setType(x & 15, y & 15, z & 15, blockData); //All non matching binary become 0.
         return chunk;
     }
-
-    public static void prototypeSetBlock(World world, int x, int y, int z, int blockId, byte data) {
-        final Chunk chunk = getChunkAt(getWorldHandle(world), x, z);
-        final IBlockData blockData = getBlockData(blockId, data);
-        ChunkSection section = getChunkSection(chunk, y);
-
-
-
-    }
-
 
     /**
      * Not certain what this does exactly. Just a theory mainly.
@@ -112,6 +94,7 @@ public class Paste {
      * @param chunk the chunk.
      * @return the valid section if found otherwise null.
      */
+    @Deprecated //Not necessary.
     private static ChunkSection getValidSection(Chunk chunk) {
         ChunkSection[] chunkSections = chunk.getSections();
         final int index = chunkSections.length -1;
@@ -177,8 +160,28 @@ public class Paste {
      * @param blockZ the z location of the block (NOT chunk coordinates).
      * @return the nms chunk.
      */
-    private static Chunk getChunkAt(net.minecraft.server.v1_8_R3.World nmsWorld, int blockX, int blockZ) {
-        return nmsWorld.getChunkAt(blockX >> 4, blockZ >> 4);
+    public static Chunk getChunkAt(net.minecraft.server.v1_8_R3.World nmsWorld, int blockX, int blockZ) {
+        return nmsWorld.getChunkAt(toChunkCoordinate(blockX), toChunkCoordinate(blockZ));
+    }
+
+    /**
+     * Returns the chunk coordinate value of a block coordinate.
+     *
+     * @param blockCoordinate the block coordinate.
+     * @return the chunk coordinate in respect to that block.
+     */
+    public static int toChunkCoordinate(final int blockCoordinate) {
+        return blockCoordinate >> 4;
+    }
+
+    /**
+     * Returns the block coordinate value that matches a chunk coordinate value.
+     *
+     * @param chunkCoordinate the chunk coordinate.
+     * @return the respective block coordinate.
+     */
+    public static int toBlockCoordinate(final int chunkCoordinate) {
+        return chunkCoordinate << 4;
     }
 
     /**
@@ -197,7 +200,7 @@ public class Paste {
      * @param data the block data.
      * @return an IBlockData object relative to the passed parameters.
      */
-    private static IBlockData getBlockData(int blockId, byte data) {
+    public static IBlockData getBlockData(int blockId, byte data) {
         return net.minecraft.server.v1_8_R3.Block.getByCombinedId(blockId + (data << 12));
     }
 
@@ -207,7 +210,7 @@ public class Paste {
      * @param world the target Bukkit world.
      * @return an NMS world.
      */
-    private static net.minecraft.server.v1_8_R3.World getWorldHandle(World world) {
+    public static net.minecraft.server.v1_8_R3.World getWorldHandle(World world) {
         return ((CraftWorld) world).getHandle();
     }
 
@@ -219,7 +222,7 @@ public class Paste {
      * @param z the z position.
      * @return a new BlockPosition object reference with the target coords.
      */
-    private static BlockPosition getBlockPosition(int x, int y, int z) {
+    public static BlockPosition getBlockPosition(int x, int y, int z) {
         return new BlockPosition(x,y,z);
     }
 
