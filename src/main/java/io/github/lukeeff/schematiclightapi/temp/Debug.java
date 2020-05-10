@@ -1,22 +1,19 @@
 package io.github.lukeeff.schematiclightapi.temp;
 
 import io.github.lukeeff.schematiclightapi.SchematicLightAPI;
-import io.github.lukeeff.schematiclightapi.schematic.Clipboard;
 import io.github.lukeeff.schematiclightapi.util.ClipboardTools;
 import io.github.lukeeff.schematiclightapi.util.Paste;
 import io.github.lukeeff.schematiclightapi.util.SchematicClipboard;
 import lombok.Getter;
 import lombok.Setter;
+import net.minecraft.server.v1_8_R3.BlockPosition;
+import net.minecraft.server.v1_8_R3.EnumSkyBlock;
 import net.minecraft.server.v1_8_R3.IBlockData;
-import net.minecraft.server.v1_8_R3.PacketPlayOutMapChunk;
-import net.minecraft.server.v1_8_R3.PacketPlayOutMapChunkBulk;
 import org.bukkit.*;
-import org.bukkit.craftbukkit.v1_8_R3.CraftChunk;
-import org.bukkit.craftbukkit.v1_8_R3.entity.CraftPlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
-
+import net.minecraft.server.v1_8_R3.Chunk;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
@@ -25,7 +22,6 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.bukkit.Bukkit.broadcastMessage;
-import static org.bukkit.Bukkit.getConsoleSender;
 import static java.lang.System.currentTimeMillis;
 
 /**
@@ -70,6 +66,7 @@ public class Debug extends AbstractBreak implements Listener {
         int blockCount = 0;
         final Location loc = e.getBlock().getLocation();
         File schematic = new File(getPlugin().getDataFolder(), getSchematicFileName());
+        net.minecraft.server.v1_8_R3.World world = Paste.getWorldHandle(loc.getWorld());
 
         try {
             SchematicClipboard clipboard = new SchematicClipboard(schematic);
@@ -80,8 +77,9 @@ public class Debug extends AbstractBreak implements Listener {
             final int height = clipboard.getHeight();
             blockCount = length * width * height;
 
-            ClipboardTools.getBukkitChunksRelative(clipboard, loc).forEach(affectedChunk -> getChunks().add(affectedChunk));
-            ClipboardTools.binaryPaste(loc, blockId, data, length, width, height);//.forEach(c -> loc.getWorld().refreshChunk(c.locX, c.locZ)); //So apparently this works perfectly...
+            ClipboardTools.getNMSChunksRelative(clipboard, loc).forEach(affectedChunk -> getChunks().add(affectedChunk));
+            ClipboardTools.binaryPaste(loc, blockId, data, length, width, height);
+            getChunks().forEach(c -> world.getChunkAt(c.locX, c.locZ).initLighting()); //Hoping this fixes lighting
             getChunks().clear();
         } catch (IOException ioException) {
             ioException.printStackTrace();
@@ -99,7 +97,7 @@ public class Debug extends AbstractBreak implements Listener {
         net.minecraft.server.v1_8_R3.World nmsWorld = Paste.getWorldHandle(world);
         switch(block) {
             case DIAMOND_BLOCK:
-                Paste.unstableSetBlock(nmsWorld, blockData, x, y, z);
+                Paste.unstableSetBlock(world, blockData, x, y, z);
                 break;
             case GOLD_BLOCK:
                 Paste.rapidSetBlock(nmsWorld, blockData, x, y, z);

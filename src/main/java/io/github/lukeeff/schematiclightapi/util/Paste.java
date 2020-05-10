@@ -1,11 +1,6 @@
 package io.github.lukeeff.schematiclightapi.util;
 
-import net.minecraft.server.v1_8_R3.BlockPosition;
-import net.minecraft.server.v1_8_R3.Chunk;
-import net.minecraft.server.v1_8_R3.ChunkSection;
-import net.minecraft.server.v1_8_R3.IBlockData;
-import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
+import net.minecraft.server.v1_8_R3.*;
 import org.bukkit.World;
 import org.bukkit.craftbukkit.v1_8_R3.CraftWorld;
 
@@ -23,6 +18,7 @@ import static org.bukkit.Bukkit.getConsoleSender;
  * @See https://www.spigotmc.org/threads/methods-for-changing-massive-amount-of-blocks-up-to-14m-blocks-s.395868/
  */
 public class Paste {
+    public static int test = 10;
 
     //chunk.a(enumskyblock, blockposition, int) looks like a setlight method
 
@@ -61,28 +57,73 @@ public class Paste {
         updateChange(world, blockPosition);
     }
 
+    public static Chunk currentChunk;
+    public static Chunk oldChunk;
+    private static char[] testing = getArray();
+
+
+    private static char[] getArray() {
+        char[] test = new char[4096];
+        Arrays.fill(test, '9');
+        return test;
+    }
     /**
-     * Fastest but more unstable way to set blocks. (Sometimes client needs a relog) Very fast
-     * block setting speed (Roughly 2-4 million a second)
+     * Fastest but more unstable way to set blocks. Very fast.
+     * block setting speed (Roughly 6-10 million a second)
      * Packet needs to be sent after and chunk needs to be reloaded to show
      * the client the changes.
      *
-     * @param world the target world.
+     * @param bukkitworld the target world.
      * @param x the x coordinate.
      * @param y the y coordinate.
      * @param z the z coordinate.
      * @param blockData the block data to be set.
      */
-    public static void unstableSetBlock(net.minecraft.server.v1_8_R3.World world, IBlockData blockData, int x, int y, int z) {
-        final Chunk chunk = getChunkAt(world, x, z);
-        ChunkSection chunkSection = getChunkSection(chunk, y); //Sometimes returns null
-        if(chunkSection == null) {
-            chunkSection = new ChunkSection(y >> 4 << 4, true);
-            chunk.getSections()[y >> 4] = chunkSection;
-        }
-        chunkSection.setType(x & 15, y & 15, z & 15, blockData); //All non matching binary become 0.
-        updateChange(world, getBlockPosition(x, y, z));
+    public static void unstableSetBlock(World bukkitworld, IBlockData blockData, int x, int y, int z) {
+        net.minecraft.server.v1_8_R3.World world = getWorldHandle(bukkitworld);
+            final Chunk chunk = getChunkAt(world, x, z);
+
+            final BlockPosition blockPosition = getBlockPosition(x, y, z);
+            ChunkSection chunkSection = getChunkSection(chunk, y); //Sometimes returns null
+            //chunkSection.b(x & 15, y & 15, z & 15, getApplyPhysicsId(true));
+            if (chunkSection == null) {
+                chunkSection = new ChunkSection(y >> 4 << 4, !chunk.world.worldProvider.o()); //Sky box light related. Creates an array when true.
+                chunk.getSections()[y >> 4] = chunkSection;
+            }
+            //world.methodProfiler.a("getBrightness");
+            //int i = enumskyblock == EnumSkyBlock.SKY ? 0 : block.r();
+            chunkSection.setType(x & 15, y & 15, z & 15, blockData); //All non matching binary become 0.
+            //chunkSection.b(x & 15, y & 15, z & 15, PRIMINT); //This could be it, but I couldn't figure out what should be in the int field.
+            //chunk.a(EnumSkyBlock.BLOCK, blockPosition, getApplyPhysicsId(true)); //I think this partially fixes lighting...
+            chunkSection.recalcBlockCounts();
+            updateChange(world, blockPosition);
+            //chunk.initLighting();
+            //updateChange(world, blockPosition);
+            //world.update(blockPosition, blockData.getBlock());
+            //world.setTypeUpdate(blockPosition, blockData);
+            //chunk.initLighting();
+            //updateChange(world, blockPosition);
+
+            if (oldChunk == null) {
+                oldChunk = chunk;
+                currentChunk = chunk;
+            } else if (!(currentChunk.locX == chunk.locX && currentChunk.locZ == chunk.locZ)) {
+                currentChunk = chunk;
+                oldChunk.initLighting();
+                oldChunk = chunk;
+                chunk.initLighting();
+                updateChange(world, blockPosition);
+            }
     }
+
+    /*
+    NEW PLAN:
+    Get data from schematic in chunks and pass into method
+    get new instance of chunk that is overriding data and
+    set world chunk equal to it then save.
+     */
+
+    //public static void setData()
 
     /**
      * Notifies a block update so that player can see.
@@ -90,8 +131,19 @@ public class Paste {
      * @param world the world.
      * @param blockPosition the block.
      */
-    public static void updateChange(net.minecraft.server.v1_8_R3.World world, BlockPosition blockPosition) {
+    private static void updateChange(net.minecraft.server.v1_8_R3.World world, BlockPosition blockPosition) {
+        //world.c(EnumSkyBlock.BLOCK, blockPosition); //Fixes light but laggy.
         world.notify(blockPosition);
+    }
+
+    /**
+     * Significant overhead. Will update lighting throughout chunk. Should not be looped with block placement
+     * for the sake of efficiency.
+     *
+     * @param chunk the chunk to have lighting updated.
+     */
+    private static void updateLighting(net.minecraft.server.v1_8_R3.Chunk chunk) {
+        chunk.initLighting();
     }
 
     /**
@@ -116,6 +168,19 @@ public class Paste {
         return null; //return null if a valid section was not found.
     }
 
+    /**
+     * Checks if a section in a chunk at a real y position is empty (containing no useful data)
+     *
+     * @param section the target chunk section
+     * @param yPos the y pos
+     * @return true if it is not an empty section.
+     */
+    private static boolean isIncludedSection(ChunkSection section, int yPos) {
+        if(section != null && ((section.getYPosition()) & (1 << yPos)) != 0) {
+            return true;
+        }
+        return false;
+    }
     /**
      * Not certain this is correct. Just a theory mainly.
      * Checks if null or if nonEmptyBlockCount is 0.
@@ -251,7 +316,7 @@ public class Paste {
     }
 
     /**
-     * Gets a BlockPosition object at the specific coordinates.
+     * Gets a BlockPosition object at the specific block coordinates.
      *
      * @param x the x position.
      * @param y the y position.

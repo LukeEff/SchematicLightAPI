@@ -41,7 +41,6 @@ public abstract class AbstractBreak implements Listener {
                 }
             }
         }
-
         Bukkit.getConsoleSender().sendMessage(ChatColor.GREEN + "Time elapsed: " + (currentTimeMillis() - time));
     }
 

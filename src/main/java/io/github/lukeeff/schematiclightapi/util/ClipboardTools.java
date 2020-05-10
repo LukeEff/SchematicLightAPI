@@ -15,6 +15,8 @@ import java.util.Set;
 
 public class ClipboardTools {
 
+    public static List<int[]> test = new ArrayList<>();
+
     public ClipboardTools() {
 
     }
@@ -23,6 +25,7 @@ public class ClipboardTools {
 
     }
 
+     //TODO check overhead from this method alone
     public static void binaryPaste(final Location loc, final byte[] blockId, final byte[] data, final int length, final int width, final int height) {
 
         IBlockData blockData;
@@ -44,9 +47,11 @@ public class ClipboardTools {
                     try {
                         blockData = Paste.getBlockData(blockId[index], data[index]);
                     } catch (ArrayIndexOutOfBoundsException | IllegalArgumentException no) {
+                        //TODO eliminate this block entirely.
                         continue;
                     }
-                    Paste.unstableSetBlock(world, blockData, worldLocX, worldLocY, worldLocZ);
+                    Paste.unstableSetBlock(loc.getWorld(), blockData, worldLocX, worldLocY, worldLocZ);
+                    //Paste.setBlock(world, blockData, worldLocX, worldLocY, worldLocZ, true);
                 }
             }
         }
@@ -83,6 +88,7 @@ public class ClipboardTools {
         final List<Chunk> chunkSet = new ArrayList<>();
         final net.minecraft.server.v1_8_R3.World world = Paste.getWorldHandle(pasteLocation.getWorld());
         getChunkCoordsRelative(clipboard, pasteLocation).forEach(xz -> chunkSet.add(world.getChunkAt(xz[0], xz[1])));
+
         return chunkSet;
     }
 
@@ -107,7 +113,7 @@ public class ClipboardTools {
     /**
      * Gets all chunks in respect to their coordinates within a region. Stored in an int array where the first
      * index is the x coordinate and the second index is the y coordinate.
-     *
+     * //TODO check overhead from this method alone
      * @param clipboard the clipboard to be pasted.
      * @param pasteLocation the location of the paste.
      * @return a Set of int arrays containing the x and z coordinates respectively to the chunk.
@@ -122,10 +128,10 @@ public class ClipboardTools {
 
         for(int x = originChunkX; x < highChunkX; x++) {
             for(int z = originChunkZ; z < highChunkZ; z++) {
-                Bukkit.getConsoleSender().sendMessage(ChatColor.AQUA + "Chunk X: " +  x + "Chunk Z: " + z);
                 chunkCoordsSet.add(new int[] {x,z});
             }
         }
+        test.addAll(chunkCoordsSet);
         return chunkCoordsSet;
     }
 
